@@ -267,4 +267,5 @@ log_config = dict(
 
 find_unused_parameters = True
 # path to pretrained model.
-load_from = "./work_dirs/pretrained/petr_vovnet_p4_1600_640_query500.pth"
+# load_from = "./work_dirs/pretrained/petr_vovnet_p4_1600_640_query500.pth"
+load_from = "/home/w/ADA-Track/pretrained/f1/f1_q5_fullres_e24.pth"
