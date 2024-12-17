@@ -495,6 +495,7 @@ class AlternatingDetAssoCamTracker(MUTRMVXTwoStageDetector):
             track_mask = None
             merged_instances = track_instances
         else:
+            # WT： 实现相连两帧间速度补偿，补偿的预测，gt不用补偿(reference_points / predict_bbox)
             track_logits = track_instances.pred_logits
 
             # Velo update
@@ -522,7 +523,7 @@ class AlternatingDetAssoCamTracker(MUTRMVXTwoStageDetector):
         ref_box_sizes = torch.cat(
             [merged_instances.pred_boxes[:, 2:4],
              merged_instances.pred_boxes[:, 5:6]], dim=1)
-        
+        #WT:cross_attention + asoo
         head_out = self.pts_bbox_head(
             mlvl_feats=img_feats,
             radar_feats=radar_feats,
@@ -538,9 +539,10 @@ class AlternatingDetAssoCamTracker(MUTRMVXTwoStageDetector):
         # output_coords: [num_dec, B, num_query, box_coder_size]
         # query_feats: [B, num_query, embed_dim]
         # last_ref_pts: [B, num_query, 3]
+        #WT：output_affinities就是相似度匹配矩阵
         output_classes, output_coords, output_affinities, inter_edge_index, \
             query_feats, last_ref_pts = head_out
-        
+
         with torch.no_grad():
             track_scores = output_classes[-1, 0, :].sigmoid().max(dim=-1).values
         
@@ -569,7 +571,7 @@ class AlternatingDetAssoCamTracker(MUTRMVXTwoStageDetector):
                 det_instances = self.criterion.match_for_detection_queries(
                     det_instances, dec_lvl=i)
                 merged_instances = Instances.cat([track_instances, det_instances])
-
+                #WT：通过GT和匹配矩阵，计算asso_loss
                 self.criterion.match_for_association(det_instances, track_instances,
                                                      output_affinities[i], inter_edge_index[i], dec_lvl=i)
 
@@ -580,6 +582,7 @@ class AlternatingDetAssoCamTracker(MUTRMVXTwoStageDetector):
         if track_mask is not None:
             track_instances = merged_instances[track_mask]
             det_instances = merged_instances[~track_mask]
+            #WT：用det_instance更新track_instance
             output_track_instances = self._associate_track_instances(track_instances, det_instances)
         else:
             output_track_instances = merged_instances[merged_instances.obj_idxes >= 0]

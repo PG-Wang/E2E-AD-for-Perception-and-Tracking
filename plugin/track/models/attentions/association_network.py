@@ -301,6 +301,15 @@ class EdgeAugmentTransformerConv(MessagePassing):
         self._alpha = None
         self._edge_feat = None
 
+        #WT_baidu:Object_aware
+        self.object_aware_gate = nn.ModuleList([
+            nn.Linear(8, 256),
+            nn.Sigmoid(),
+            nn.Linear(256, 128),
+            nn.ReLU(),
+            nn.Linear(128, 1),
+            nn.Sigmoid()
+        ])
         if isinstance(in_channels, int):
             in_channels = (in_channels, in_channels)
 
@@ -361,9 +370,9 @@ class EdgeAugmentTransformerConv(MessagePassing):
         if isinstance(x, Tensor):
             x: PairTensor = (x, x)
 
-        query = self.lin_query(x[1]).view(-1, H, C)
-        key = self.lin_key(x[0]).view(-1, H, C)
-        value = self.lin_value(x[0]).view(-1, H, C)
+        query = self.lin_query(x[1]).view(-1, H, C) #det_query
+        key = self.lin_key(x[0]).view(-1, H, C) #track_query
+        value = self.lin_value(x[0]).view(-1, H, C) #track_query
 
         edge_attn = self.lin_edge_attn(edge_attr)
         edge_gate = None
@@ -419,9 +428,15 @@ class EdgeAugmentTransformerConv(MessagePassing):
         #     key_j += edge_attr
         
         alpha = (query_i * key_j).sum(dim=-1) / math.sqrt(self.out_channels)
-        alpha += edge_attn
-        self._edge_feat = alpha
+        object_aware_gate = alpha
+        # alpha += edge_attn
+        #WT_baidu：Object—Aware加权和
+        for layer in self.object_aware_gate:
+            object_aware_gate = layer(object_aware_gate)
+        alpha = object_aware_gate * alpha + (1 - object_aware_gate) * edge_attn
 
+        self._edge_feat = alpha
+        #WT:匹配分数矩阵
         alpha = softmax(alpha, index, ptr, size_i)
         self._alpha = alpha
         alpha = F.dropout(alpha, p=self.dropout, training=self.training)
@@ -497,6 +512,7 @@ class EdgeAugmentedDecoderLayer(BaseModule):
     
     def forward(self, src, tgt, edge_index_cross, edge_index_tgt, 
                 edge_attr_cra=None):
+        # det_query
         x = tgt
 
         if self.norm_first:
@@ -518,7 +534,7 @@ class EdgeAugmentedDecoderLayer(BaseModule):
                 src, x, edge_index_cross, edge_attr_cra)
             x = self.norm2(x + x_delta)
             x = self.norm3(x + self._ff_block(x))
-
+            #WT_baidu:geometry_plus_2?
             edge_attr_cra = self.norm_e1(edge_attr_cra + edge_attr_cra_delta)
             edge_attr_cra = self.norm_e2(edge_attr_cra + self._ff_block_edge(edge_attr_cra))
 
@@ -582,17 +598,22 @@ class EdgeAugmentedTransformerAssociationLayer(BaseModule, ABC):
 
     def forward(self, track_query, det_query, edge_index_det,
                       edge_index_cross, edge_attr_cross, edge_attr_cross_pos):
-
+        #WT:生成geometry_embeding
         edge_attr_cross_pos = self.embedding_edge(edge_attr_cross_pos)
         if edge_attr_cross is None:
             edge_attr_cross = edge_attr_cross_pos
         else:
             edge_attr_cross = edge_attr_cross + edge_attr_cross_pos
-
+        #WT：edge_attr_cross是geometry_embeding
         det_query, edge_attr_cross, _ = self.decoder_layer(
             track_query, det_query, edge_index_cross, edge_index_det, edge_attr_cross
         )
-
+        # det_query, _, _ = self.decoder_layer(
+        #     track_query, det_query, edge_index_cross, edge_index_det, edge_attr_cross
+        # )
+        #WT：1.保留包含geometry-feature|track-feature特征的det_query；
+        # 2.将特征匹配矩阵edge_attr_cross变成显式geometry-feature/appearance-feature加权和；
+        # 3.实现Object-Aware加权和
         if self.norm_first:
             det_query = self.norm_final(det_query)
             edge_attr_cross = self.norm_final_edge(edge_attr_cross)

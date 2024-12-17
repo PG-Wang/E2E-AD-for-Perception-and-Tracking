@@ -222,6 +222,7 @@ class DETR3DAssoTrackingHead(nn.Module):
         # hs: features: (num_dec_layers, num_query, bs, embed_dims)
         # init_reference: (1, bs, num_query, 3)
         # inter_references: (num_dec_layers-1, bs, num_query, 3)
+        # WT:inter_edge_attr:匹配特征矩阵；inter_edge_index：匹配特征矩阵的索引，用来索引track/det之间的对应关系
         hs, inter_references, inter_box_sizes, inter_edge_index, inter_edge_attr = self.transformer(
             mlvl_feats,
             query_embeds,

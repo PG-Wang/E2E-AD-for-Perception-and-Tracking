@@ -123,6 +123,7 @@ class DETR3DAssoTrackingTransformer(BaseModule):
         query = query.permute(1, 0, 2)
         # memory = memory.permute(1, 0, 2)
         query_pos = query_pos.permute(1, 0, 2)
+        #WT：返回参数解释：
         inter_states, inter_references, inter_box_sizes, inter_edge_index, inter_edge_attr = self.decoder(
             query=query,
             key=None,
@@ -228,6 +229,8 @@ class DETR3DAssoTrackingTransformerDecoder(TransformerLayerSequence):
                 return_intermediate is `False`, otherwise it has shape
                 [num_layers, num_query, bs, embed_dims].
         """
+        # WT：inter_states, inter_references, inter_box_sizes, inter_edge_index, inter_edge_attr = self.decoder(
+
         output = query
         output_edge = None
         intermediate = []
@@ -301,7 +304,7 @@ class DETR3DAssoTrackingTransformerDecoder(TransformerLayerSequence):
                 # TODO: Maybe fix the class of tracks?
                 tmp_track_cls = tmp_cls[:, track_mask, :].squeeze(0)
                 tmp_det_cls = tmp_cls[:, ~track_mask, :].squeeze(0)
-
+                #WT：通过pos生成geometry_denormalization，注意还不是geometry_embedding
                 edge_index_cross, edge_attr_cross_pos = self._build_det_track_graph(
                     tmp_track_box.detach(), tmp_track_cls.detach(),
                     tmp_det_box.detach(), tmp_det_cls.detach())
@@ -313,7 +316,8 @@ class DETR3DAssoTrackingTransformerDecoder(TransformerLayerSequence):
                 adj_det = torch.ones(num_det, num_det, 
                                        dtype=torch.int32, device=track_query.device)
                 edge_index_det = torch.nonzero(adj_det).transpose(1, 0).long()
-
+                #WT：edge_attr_cross_poss:geometry_denormalization；
+                #output_edge：gometry_embeding_matrix
                 det_query, output_edge = asso_layer(track_query.squeeze(0), 
                                                         det_query.squeeze(0),
                                                         edge_index_det,
