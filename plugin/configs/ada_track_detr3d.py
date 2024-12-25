@@ -269,5 +269,6 @@ log_config = dict(
 
 find_unused_parameters = True
 # path to pretrained model.
-load_from = "/home/w/ADA-Track/pretrained/detr3d_resnet101.pth"
+# load_from = "/home/w/ADA-Track/pretrained/detr3d_resnet101.pth"
+resume_from = "/home/w/ADA-Track/work_dirs/1217_class_aware/epoch_14.pth"
 fp16 = dict(loss_scale='dynamic')
